@@ -11,7 +11,9 @@ const nextConfig: NextConfig = {
   
   // Image optimization
   images: {
-    unoptimized: true, // For self-hosted deployment
+    domains: ['localhost', 'your-production-domain.com'],
+    minimumCacheTTL: 60,
+    formats: ['image/avif', 'image/webp'],
   },
   
   // Webpack configuration
@@ -77,9 +79,15 @@ const nextConfig: NextConfig = {
     BUILD_TIME: new Date().toISOString(),
   },
   
-  // Experimental features for performance
-  experimental: {
-    optimizeCss: true,
+  // Production optimizations
+  compress: true,
+  productionBrowserSourceMaps: false,
+  reactStrictMode: true,
+  eslint: {
+    ignoreDuringBuilds: false,
+  },
+  typescript: {
+    ignoreBuildErrors: false,
   },
 };
 

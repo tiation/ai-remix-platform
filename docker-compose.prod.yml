@@ -1,4 +1,4 @@
-version: '3.8'
+# Production Docker Compose - version field removed per Docker Compose v2+ standards
 
 # Production Docker Compose for docker.tiation.net
 # Optimized for low-overhead SaaS operation
