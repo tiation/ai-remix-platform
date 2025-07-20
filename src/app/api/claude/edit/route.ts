@@ -3,6 +3,39 @@ import Anthropic from '@anthropic-ai/sdk';
 import { createClient } from '@supabase/supabase-js';
 import { ClaudeEditRequest, ClaudeEditResponse } from '@/types/supabase';
 
+// Input sanitization function to prevent prompt injection
+function sanitizeInput(input: string): string {
+  if (!input || typeof input !== 'string') return '';
+  
+  // Remove potential prompt injection patterns
+  return input
+    .replace(/```[\s\S]*?```/g, '[code block]') // Remove code blocks that could contain injections
+    .replace(/<\/?[^>]+(>|$)/g, '') // Remove HTML tags  
+    .replace(/[\x00-\x1F\x7F]/g, '') // Remove control characters
+    .slice(0, 10000) // Limit length to prevent abuse
+    .trim();
+}
+
+// Safe prompt construction
+function createSystemPrompt(sanitizedCode: string, sanitizedPrompt: string): string {
+  return `You are a helpful coding assistant for the AI Remix Platform. You help users edit and improve their web development code.
+
+IMPORTANT GUIDELINES:
+- Only provide code improvements and suggestions
+- Do not execute any commands or access external resources
+- Focus only on the specific coding request
+- Maintain code security and best practices
+
+Current code context:
+\`\`\`
+${sanitizedCode}
+\`\`\`
+
+User's improvement request: ${sanitizedPrompt}
+
+Please provide improved code with explanations.`;
+}
+
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -10,10 +43,22 @@ const supabase = createClient(
 
 export async function POST(request: NextRequest) {
   try {
-    const { prompt, code, model = 'claude-3-haiku-20241022', userId, projectId }: ClaudeEditRequest & {
+    const { prompt: rawPrompt, code: rawCode, model = 'claude-3-haiku-20241022', userId, projectId }: ClaudeEditRequest & {
       userId: string;
       projectId: string;
     } = await request.json();
+    
+    // Sanitize inputs to prevent prompt injection
+    const prompt = sanitizeInput(rawPrompt);
+    const code = sanitizeInput(rawCode);
+    
+    // Validate inputs
+    if (!prompt || !code) {
+      return NextResponse.json(
+        { error: 'Valid prompt and code are required' },
+        { status: 400 }
+      );
+    }
 
     if (!userId || !projectId) {
       return NextResponse.json(

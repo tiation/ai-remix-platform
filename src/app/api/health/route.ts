@@ -8,16 +8,15 @@ const supabase = createClient(
 
 export async function GET() {
   try {
+    // Basic health check without exposing sensitive system information
     const healthCheck = {
       status: 'healthy',
       timestamp: new Date().toISOString(),
       service: 'ai-remix-platform',
-      version: process.env.npm_package_version || '1.0.0',
-      environment: process.env.NODE_ENV || 'development',
+      version: '1.0.0', // Static version for security
       checks: {
         database: 'unknown',
-        memory: 'unknown',
-        uptime: process.uptime(),
+        api: 'healthy',
       }
     };
 
@@ -35,10 +34,8 @@ export async function GET() {
       healthCheck.status = 'degraded';
     }
 
-    // Check memory usage
-    const memUsage = process.memoryUsage();
-    const memUsageMB = Math.round(memUsage.heapUsed / 1024 / 1024);
-    healthCheck.checks.memory = `${memUsageMB}MB`;
+    // Remove sensitive system information exposure
+    // Memory usage and uptime details removed for security
 
     // Overall health status
     if (healthCheck.checks.database === 'unhealthy') {

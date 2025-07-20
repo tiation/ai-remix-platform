@@ -1,3 +1,133 @@
+# Tiation Portfolio
+
+An enterprise-grade portfolio application built with Next.js, TypeScript, and Supabase.
+
+![Portfolio Preview](./public/images/preview.png)
+
+## 🌟 Features
+
+- Dark neon theme with cyan/magenta gradients
+- Mobile-first, responsive design
+- TypeScript throughout
+- Enterprise-grade security
+- SaaS functionality with Stripe integration
+- Comprehensive testing suite
+- CI/CD pipeline with GitHub Actions
+- Containerized deployment
+
+## 🏗 Architecture
+
+![Architecture Diagram](./docs/images/architecture.png)
+
+### Tech Stack
+
+- **Frontend**: Next.js 14, React 18, TypeScript
+- **Styling**: TailwindCSS
+- **Authentication**: Supabase Auth
+- **Database**: Supabase PostgreSQL
+- **Payment Processing**: Stripe
+- **Deployment**: AWS ECS, Docker
+- **CI/CD**: GitHub Actions
+
+## 🚀 Getting Started
+
+### Prerequisites
+
+- Node.js 20.x
+- npm 10.x
+- Docker (for containerized development)
+
+### Installation
+
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/tiation/tiation-portfolio.git
+   cd tiation-portfolio
+   ```
+
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+
+3. Set up environment variables:
+   ```bash
+   cp .env.example .env.local
+   ```
+   Edit `.env.local` with your configuration values.
+
+4. Run the development server:
+   ```bash
+   npm run dev
+   ```
+
+### Docker Development
+
+1. Build and run with Docker Compose:
+   ```bash
+   docker-compose up --build
+   ```
+
+## 🧪 Testing
+
+Run the test suite:
+```bash
+npm test
+```
+
+Run with coverage:
+```bash
+npm test -- --coverage
+```
+
+## 🛡 Security Features
+
+- CSP Headers
+- Rate Limiting
+- CSRF Protection
+- XSS Prevention
+- Input Validation
+- Secure Session Management
+- Error Boundary Implementation
+- Comprehensive Error Logging
+
+## 📦 Production Deployment
+
+1. Build the production image:
+   ```bash
+   docker build -f Dockerfile.prod -t tiation-portfolio:prod .
+   ```
+
+2. Push to container registry:
+   ```bash
+   docker push your-registry/tiation-portfolio:prod
+   ```
+
+3. Deploy to AWS ECS:
+   ```bash
+   aws ecs update-service --cluster production --service tiation-portfolio --force-new-deployment
+   ```
+
+## 🔍 Code Quality
+
+- ESLint configuration
+- Prettier formatting
+- TypeScript strict mode
+- Jest testing framework
+- GitHub Actions CI/CD
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🤝 Contributing
+
+Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on our code of conduct and the process for submitting pull requests.
+
+## 🌟 Support
+
+For support, email tiatheone@protonmail.com
+
 # AI Remix Platform
 
 A full-stack web application similar to Lovable.dev that includes a public project gallery, remixable projects, live previews, and a **Claude-powered AI edit/chat interface**. Self-hostable on Ubuntu VPS with user-provided Claude API keys.

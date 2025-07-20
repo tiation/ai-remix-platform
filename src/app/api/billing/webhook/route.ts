@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { headers } from 'next/headers';
 import { createClient } from '@supabase/supabase-js';
+import Stripe from 'stripe';
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+  apiVersion: '2024-06-20',
+});
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -14,17 +19,33 @@ export async function POST(req: NextRequest) {
   const headersList = headers();
   const signature = headersList.get('stripe-signature');
 
-  // In production, verify the webhook signature
+  // Verify the webhook signature for security
   if (!signature || !process.env.STRIPE_WEBHOOK_SECRET) {
+    console.error('Missing Stripe signature or webhook secret');
     return NextResponse.json(
       { error: 'Missing stripe signature or webhook secret' },
       { status: 400 }
     );
   }
 
+  let event: Stripe.Event;
+
   try {
-    // Parse the event (in production, use Stripe's webhook verification)
-    const event = JSON.parse(body);
+    // Verify the webhook signature and parse the event
+    event = stripe.webhooks.constructEvent(
+      body,
+      signature,
+      process.env.STRIPE_WEBHOOK_SECRET
+    );
+  } catch (err: any) {
+    console.error('Webhook signature verification failed:', err.message);
+    return NextResponse.json(
+      { error: `Webhook signature verification failed: ${err.message}` },
+      { status: 400 }
+    );
+  }
+
+  try {
 
     switch (event.type) {
       case 'customer.subscription.created':

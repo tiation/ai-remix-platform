@@ -84,12 +84,20 @@ generate_secrets() {
     JWT_SECRET=$(openssl rand -base64 64 | tr -d "=+/" | cut -c1-64)
     NEXTAUTH_SECRET=$(openssl rand -base64 32 | tr -d "=+/" | cut -c1-32)
     
-    # Generate Supabase API keys based on JWT secret
-    # These are standard Supabase demo keys - in production you'd generate properly
-    ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0"
-    SERVICE_ROLE_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MTk4MzgxMjk5Nn0.EGIM96RAZx35lJzdJsyH-qQwv8Hdp7fsn3W0YpN81IU"
+    # Generate production Supabase API keys based on JWT secret
+    # Create proper JWT tokens for production use
+    ANON_PAYLOAD='{"iss":"supabase","ref":"ai-remix-platform","role":"anon","iat":1640995200,"exp":2147483647}'
+    SERVICE_PAYLOAD='{"iss":"supabase","ref":"ai-remix-platform","role":"service_role","iat":1640995200,"exp":2147483647}'
     
-    log "Secrets generated successfully"
+    # Generate JWT tokens using the secret
+    ANON_KEY=$(echo -n "$ANON_PAYLOAD" | openssl base64 -A | tr -d '=' | tr '/+' '_-')
+    SERVICE_ROLE_KEY=$(echo -n "$SERVICE_PAYLOAD" | openssl base64 -A | tr -d '=' | tr '/+' '_-')
+    
+    # Create proper signed JWTs (simplified - in production use proper JWT library)
+    ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.$(echo -n '{"iss":"supabase","ref":"ai-remix-platform","role":"anon","iat":1640995200,"exp":2147483647}' | openssl base64 -A | tr -d '=' | tr '/+' '_-').$(echo -n "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.$(echo -n '{"iss":"supabase","ref":"ai-remix-platform","role":"anon","iat":1640995200,"exp":2147483647}' | openssl base64 -A | tr -d '=' | tr '/+' '_-')" | openssl dgst -sha256 -hmac "$JWT_SECRET" -binary | openssl base64 -A | tr -d '=' | tr '/+' '_-')"
+    SERVICE_ROLE_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.$(echo -n '{"iss":"supabase","ref":"ai-remix-platform","role":"service_role","iat":1640995200,"exp":2147483647}' | openssl base64 -A | tr -d '=' | tr '/+' '_-').$(echo -n "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.$(echo -n '{"iss":"supabase","ref":"ai-remix-platform","role":"service_role","iat":1640995200,"exp":2147483647}' | openssl base64 -A | tr -d '=' | tr '/+' '_-')" | openssl dgst -sha256 -hmac "$JWT_SECRET" -binary | openssl base64 -A | tr -d '=' | tr '/+' '_-')"
+    
+    log "Production secrets and JWT tokens generated successfully"
 }
 
 # Create production environment file
