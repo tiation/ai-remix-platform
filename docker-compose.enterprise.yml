@@ -1,0 +1,517 @@
+# Enterprise-grade Docker Compose configuration
+# Designed for 10K+ concurrent users with high availability
+
+services:
+  # PostgreSQL Primary Database with connection pooling
+  postgres-primary:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-ai_remix_platform}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_REPLICATION_MODE: master
+      POSTGRES_REPLICATION_USER: replicator
+      POSTGRES_REPLICATION_PASSWORD: ${POSTGRES_REPLICATION_PASSWORD}
+    volumes:
+      - postgres_primary_data:/var/lib/postgresql/data
+      - ./supabase/migrations:/docker-entrypoint-initdb.d/:ro
+      - ./backups:/backups
+      - ./postgresql.conf:/etc/postgresql/postgresql.conf:ro
+    networks:
+      - ai-remix-network
+    command: |
+      postgres -c config_file=/etc/postgresql/postgresql.conf
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 1G
+
+  # PostgreSQL Read Replica for scaling read operations
+  postgres-replica:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_MASTER_SERVICE: postgres-primary
+      POSTGRES_REPLICATION_MODE: slave
+      POSTGRES_REPLICATION_USER: replicator
+      POSTGRES_REPLICATION_PASSWORD: ${POSTGRES_REPLICATION_PASSWORD}
+    depends_on:
+      postgres-primary:
+        condition: service_healthy
+    volumes:
+      - postgres_replica_data:/var/lib/postgresql/data
+    networks:
+      - ai-remix-network
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 512M
+
+  # PgBouncer Connection Pooler
+  pgbouncer:
+    image: pgbouncer/pgbouncer:latest
+    restart: unless-stopped
+    environment:
+      DATABASES_HOST: postgres-primary
+      DATABASES_PORT: 5432
+      DATABASES_USER: ${POSTGRES_USER:-postgres}
+      DATABASES_PASSWORD: ${POSTGRES_PASSWORD}
+      DATABASES_DBNAME: ${POSTGRES_DB:-ai_remix_platform}
+      POOL_MODE: transaction
+      MAX_CLIENT_CONN: 1000
+      DEFAULT_POOL_SIZE: 25
+      MIN_POOL_SIZE: 10
+      RESERVE_POOL_SIZE: 5
+      STATS_USERS: ${POSTGRES_USER:-postgres}
+      ADMIN_USERS: ${POSTGRES_USER:-postgres}
+    depends_on:
+      postgres-primary:
+        condition: service_healthy
+    networks:
+      - ai-remix-network
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
+
+  # Redis Cluster for distributed caching and sessions
+  redis-node-1:
+    image: redis/redis-stack-server:latest
+    restart: unless-stopped
+    command: |
+      redis-server --cluster-enabled yes --cluster-config-file nodes-1.conf 
+      --cluster-node-timeout 5000 --appendonly yes --port 7001
+      --maxmemory 512mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_node_1_data:/data
+    networks:
+      - ai-remix-network
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+  redis-node-2:
+    image: redis/redis-stack-server:latest  
+    restart: unless-stopped
+    command: |
+      redis-server --cluster-enabled yes --cluster-config-file nodes-2.conf
+      --cluster-node-timeout 5000 --appendonly yes --port 7002
+      --maxmemory 512mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_node_2_data:/data
+    networks:
+      - ai-remix-network
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+  redis-node-3:
+    image: redis/redis-stack-server:latest
+    restart: unless-stopped  
+    command: |
+      redis-server --cluster-enabled yes --cluster-config-file nodes-3.conf
+      --cluster-node-timeout 5000 --appendonly yes --port 7003
+      --maxmemory 512mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_node_3_data:/data
+    networks:
+      - ai-remix-network
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+  # PostgREST with connection pooling
+  postgrest:
+    image: postgrest/postgrest:v12.0.2
+    restart: unless-stopped
+    depends_on:
+      pgbouncer:
+        condition: service_started
+    environment:
+      PGRST_DB_URI: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@pgbouncer:6432/${POSTGRES_DB:-ai_remix_platform}
+      PGRST_DB_SCHEMAS: ${PGRST_DB_SCHEMAS:-public,auth}
+      PGRST_DB_ANON_ROLE: ${PGRST_DB_ANON_ROLE:-anon}
+      PGRST_JWT_SECRET: ${JWT_SECRET}
+      PGRST_DB_USE_LEGACY_GUCS: "false"
+      PGRST_DB_POOL: 50
+      PGRST_DB_POOL_ACQUISITION_TIMEOUT: 10
+      PGRST_DB_CHANNEL_ENABLED: false
+    networks:
+      - ai-remix-network
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+  # GoTrue Authentication service
+  gotrue:
+    image: supabase/gotrue:v2.143.0
+    restart: unless-stopped
+    depends_on:
+      pgbouncer:
+        condition: service_started
+    environment:
+      GOTRUE_API_HOST: 0.0.0.0
+      GOTRUE_API_PORT: 9999
+      API_EXTERNAL_URL: ${API_EXTERNAL_URL:-https://ai-remix.tiation.net}
+      
+      GOTRUE_DB_DRIVER: postgres
+      GOTRUE_DB_DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@pgbouncer:6432/${POSTGRES_DB:-ai_remix_platform}?search_path=auth
+      
+      GOTRUE_SITE_URL: ${SITE_URL:-https://ai-remix.tiation.net}
+      GOTRUE_URI_ALLOW_LIST: ${ADDITIONAL_REDIRECT_URLS:-}
+      GOTRUE_DISABLE_SIGNUP: ${DISABLE_SIGNUP:-false}
+      
+      GOTRUE_JWT_ADMIN_ROLES: service_role
+      GOTRUE_JWT_AUD: authenticated
+      GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
+      GOTRUE_JWT_EXP: ${JWT_EXPIRY:-3600}
+      GOTRUE_JWT_SECRET: ${JWT_SECRET}
+      
+      GOTRUE_EXTERNAL_EMAIL_ENABLED: ${ENABLE_EMAIL_SIGNUP:-true}
+      GOTRUE_MAILER_AUTOCONFIRM: ${ENABLE_EMAIL_AUTOCONFIRM:-false}
+      GOTRUE_SMTP_ADMIN_EMAIL: ${SMTP_ADMIN_EMAIL:-admin@tiation.net}
+      GOTRUE_SMTP_HOST: ${SMTP_HOST:-}
+      GOTRUE_SMTP_PORT: ${SMTP_PORT:-587}
+      GOTRUE_SMTP_USER: ${SMTP_USER:-}
+      GOTRUE_SMTP_PASS: ${SMTP_PASS:-}
+      
+      GOTRUE_EXTERNAL_GITHUB_ENABLED: ${ENABLE_GITHUB_SIGNUP:-true}
+      GOTRUE_EXTERNAL_GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
+      GOTRUE_EXTERNAL_GITHUB_SECRET: ${GITHUB_SECRET:-}
+      GOTRUE_EXTERNAL_GITHUB_REDIRECT_URI: ${API_EXTERNAL_URL:-https://ai-remix.tiation.net}/auth/v1/callback
+      
+      # Enterprise SSO
+      GOTRUE_EXTERNAL_SAML_ENABLED: ${ENABLE_SAML_SSO:-false}
+      GOTRUE_EXTERNAL_OIDC_ENABLED: ${ENABLE_OIDC_SSO:-false}
+    networks:
+      - ai-remix-network
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+  # Kong API Gateway with enterprise features
+  kong:
+    image: kong/kong-gateway:3.4.2.0
+    restart: unless-stopped
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /var/lib/kong/kong.yml
+      KONG_DNS_ORDER: LAST,A,CNAME
+      KONG_PLUGINS: request-transformer,cors,key-auth,acl,rate-limiting,prometheus,response-transformer
+      KONG_NGINX_PROXY_PROXY_BUFFER_SIZE: 160k
+      KONG_NGINX_PROXY_PROXY_BUFFERS: 64 160k
+      KONG_LOG_LEVEL: info
+      KONG_NGINX_WORKER_PROCESSES: 4
+      KONG_ADMIN_ACCESS_LOG: /dev/stdout
+      KONG_ADMIN_ERROR_LOG: /dev/stderr
+      KONG_PROXY_ACCESS_LOG: /dev/stdout
+      KONG_PROXY_ERROR_LOG: /dev/stderr
+    volumes:
+      - ./supabase/config/kong.enterprise.yml:/var/lib/kong/kong.yml:ro
+    networks:
+      - ai-remix-network
+    depends_on:
+      - gotrue
+      - postgrest
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.supabase.rule=Host(`ai-remix.tiation.net`) && PathPrefix(`/auth`,`/rest`,`/storage`)"
+      - "traefik.http.routers.supabase.tls.certresolver=letsencrypt"
+      - "traefik.http.services.supabase.loadbalancer.server.port=8000"
+      - "traefik.http.services.supabase.loadbalancer.healthcheck.path=/status"
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 512M
+
+  # Next.js Application with scaling
+  nextjs-app:
+    build:
+      context: .
+      dockerfile: Dockerfile.prod
+      target: production
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      NEXT_PUBLIC_SUPABASE_URL: https://ai-remix.tiation.net
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${ANON_KEY}
+      SUPABASE_SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY}
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET}
+      NEXTAUTH_URL: https://ai-remix.tiation.net
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@pgbouncer:6432/${POSTGRES_DB:-ai_remix_platform}
+      REDIS_URL: redis://redis-node-1:7001,redis://redis-node-2:7002,redis://redis-node-3:7003
+      
+      # Enterprise features
+      ENABLE_ORGANIZATIONS: true
+      ENABLE_SSO: ${ENABLE_SSO:-false}
+      ENABLE_AUDIT_LOGGING: true
+      ENTERPRISE_MODE: true
+    volumes:
+      - ./uploads:/app/uploads
+      - nextjs_cache:/app/.next/cache
+    networks:
+      - ai-remix-network
+    depends_on:
+      pgbouncer:
+        condition: service_started
+      redis-node-1:
+        condition: service_started
+      kong:
+        condition: service_started
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.airemix.rule=Host(`ai-remix.tiation.net`)"
+      - "traefik.http.routers.airemix.tls.certresolver=letsencrypt"
+      - "traefik.http.services.airemix.loadbalancer.server.port=3000"
+      - "traefik.http.services.airemix.loadbalancer.healthcheck.path=/api/health"
+      - "traefik.http.services.airemix.loadbalancer.healthcheck.interval=30s"
+    deploy:
+      replicas: 3
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 1G
+
+  # Background job processing with Bull Queue
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@pgbouncer:6432/${POSTGRES_DB:-ai_remix_platform}
+      REDIS_URL: redis://redis-node-1:7001,redis://redis-node-2:7002,redis://redis-node-3:7003
+      SUPABASE_SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY}
+    networks:
+      - ai-remix-network
+    depends_on:
+      pgbouncer:
+        condition: service_started
+      redis-node-1:
+        condition: service_started
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 512M
+
+  # Traefik Load Balancer with enterprise features
+  traefik:
+    image: traefik:v3.0
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - traefik_data:/data
+      - ./traefik:/etc/traefik:ro
+    networks:
+      - ai-remix-network
+    command:
+      - --api.dashboard=true
+      - --api.debug=false
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --providers.file.directory=/etc/traefik
+      - --providers.file.watch=true
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+      - --entrypoints.web.http.redirections.entrypoint.to=websecure
+      - --entrypoints.web.http.redirections.entrypoint.scheme=https
+      - --certificatesresolvers.letsencrypt.acme.email=admin@tiation.net
+      - --certificatesresolvers.letsencrypt.acme.storage=/data/acme.json
+      - --certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web
+      - --log.level=INFO
+      - --accesslog=true
+      - --metrics.prometheus=true
+      - --metrics.prometheus.addentrypointslabels=true
+      - --metrics.prometheus.addserviceslabels=true
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.traefik.rule=Host(`traefik.tiation.net`)"
+      - "traefik.http.routers.traefik.tls.certresolver=letsencrypt"
+      - "traefik.http.services.traefik.loadbalancer.server.port=8080"
+      - "traefik.http.routers.traefik.middlewares=auth"
+      - "traefik.http.middlewares.auth.basicauth.users=admin:$$2y$$10$$..."
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+  # Prometheus Monitoring
+  prometheus:
+    image: prom/prometheus:latest
+    restart: unless-stopped
+    volumes:
+      - ./monitoring/prometheus.enterprise.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/rules:/etc/prometheus/rules:ro
+      - prometheus_data:/prometheus
+    networks:
+      - ai-remix-network
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=30d'
+      - '--storage.tsdb.retention.size=10GB'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--web.enable-lifecycle'
+      - '--web.enable-admin-api'
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.prometheus.rule=Host(`prometheus.tiation.net`)"
+      - "traefik.http.routers.prometheus.tls.certresolver=letsencrypt"
+      - "traefik.http.services.prometheus.loadbalancer.server.port=9090"
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 512M
+
+  # Grafana Dashboards
+  grafana:
+    image: grafana/grafana:latest
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD}
+      GF_SERVER_ROOT_URL: https://grafana.tiation.net
+      GF_DATABASE_TYPE: postgres
+      GF_DATABASE_HOST: pgbouncer:6432
+      GF_DATABASE_NAME: ${POSTGRES_DB:-ai_remix_platform}
+      GF_DATABASE_USER: ${POSTGRES_USER:-postgres}
+      GF_DATABASE_PASSWORD: ${POSTGRES_PASSWORD}
+      GF_SESSION_PROVIDER: redis
+      GF_SESSION_PROVIDER_CONFIG: addr=redis-node-1:7001,pool_size=100,db=grafana
+      GF_INSTALL_PLUGINS: grafana-piechart-panel,grafana-worldmap-panel
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+    networks:
+      - ai-remix-network
+    depends_on:
+      - prometheus
+      - pgbouncer
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.grafana.rule=Host(`grafana.tiation.net`)"
+      - "traefik.http.routers.grafana.tls.certresolver=letsencrypt"
+      - "traefik.http.services.grafana.loadbalancer.server.port=3000"
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+  # Jaeger Distributed Tracing
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    restart: unless-stopped
+    environment:
+      COLLECTOR_OTLP_ENABLED: true
+      SPAN_STORAGE_TYPE: elasticsearch
+      ES_SERVER_URLS: http://elasticsearch:9200
+    networks:
+      - ai-remix-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.jaeger.rule=Host(`jaeger.tiation.net`)"
+      - "traefik.http.routers.jaeger.tls.certresolver=letsencrypt"
+      - "traefik.http.services.jaeger.loadbalancer.server.port=16686"
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+  # ElasticSearch for log aggregation and tracing
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+    restart: unless-stopped
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    networks:
+      - ai-remix-network
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 512M
+
+volumes:
+  postgres_primary_data:
+    driver: local
+  postgres_replica_data:
+    driver: local
+  redis_node_1_data:
+    driver: local
+  redis_node_2_data:
+    driver: local
+  redis_node_3_data:
+    driver: local
+  traefik_data:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+  elasticsearch_data:
+    driver: local
+  nextjs_cache:
+    driver: local
+
+networks:
+  ai-remix-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+          gateway: 172.20.0.1

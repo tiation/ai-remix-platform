@@ -1,0 +1,40 @@
+sources:
+  docker_logs:
+    type: docker_logs
+    include_labels:
+      - "com.docker.compose.service"
+
+transforms:
+  parse_logs:
+    type: remap
+    inputs:
+      - docker_logs
+    source: |
+      . = parse_json!(.message)
+      .timestamp = now()
+      .service = .label."com.docker.compose.service"
+
+sinks:
+  console:
+    type: console
+    inputs:
+      - parse_logs
+    encoding:
+      codec: json
+
+  postgres:
+    type: postgresql
+    inputs:
+      - parse_logs
+    host: postgres
+    port: 5432
+    user: postgres
+    password: "${POSTGRES_PASSWORD:-your-super-secret-and-long-postgres-password}"
+    database: "${POSTGRES_DB:-postgres}"
+    table: logs
+    encoding:
+      only_fields:
+        - timestamp
+        - level
+        - message
+        - service
