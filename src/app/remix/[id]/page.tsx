@@ -128,6 +128,39 @@ export default function ProjectEditorPage({ params }: { params: { id: string } }
     }
   };
 
+  const handleExport = () => {
+    const blob = new Blob([code], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${projectMetadata.title.toLowerCase().replace(/\s+/g, '-')}.html`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleShare = async () => {
+    const shareUrl = `${window.location.origin}/remix/${project?.id}`;
+    
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: projectMetadata.title,
+          text: projectMetadata.description,
+          url: shareUrl,
+        });
+      } catch (error) {
+        // Fall back to clipboard copy
+        navigator.clipboard.writeText(shareUrl);
+        alert('Link copied to clipboard!');
+      }
+    } else {
+      navigator.clipboard.writeText(shareUrl);
+      alert('Link copied to clipboard!');
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -180,6 +213,22 @@ export default function ProjectEditorPage({ params }: { params: { id: string } }
               className="px-3 py-1 text-sm bg-gray-100 dark:bg-gray-800 rounded hover:bg-gray-200 dark:hover:bg-gray-700"
             >
               {showPreview ? 'Hide' : 'Show'} Preview
+            </button>
+
+            <button
+              onClick={handleExport}
+              className="px-3 py-1 text-sm bg-gray-100 dark:bg-gray-800 rounded hover:bg-gray-200 dark:hover:bg-gray-700"
+              title="Download HTML file"
+            >
+              Export
+            </button>
+
+            <button
+              onClick={handleShare}
+              className="px-3 py-1 text-sm bg-gray-100 dark:bg-gray-800 rounded hover:bg-gray-200 dark:hover:bg-gray-700"
+              title="Share project"
+            >
+              Share
             </button>
             
             {isOwnProject ? (

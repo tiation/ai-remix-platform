@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { Project } from '@/types/supabase';
+import ThemeToggle from '@/components/ThemeToggle';
 
 export default function Home() {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -50,33 +51,15 @@ export default function Home() {
     return matchesSearch && matchesTag;
   });
 
-  const handleCreateNew = async () => {
+  const handleCreateNew = () => {
     if (!user) {
       // Redirect to auth
       window.location.href = '/auth';
       return;
     }
 
-    try {
-      const { data: newProject, error } = await supabase
-        .from('projects')
-        .insert({
-          title: 'Untitled Project',
-          description: 'A new project created with Claude AI',
-          code: '<!DOCTYPE html>\n<html>\n<head>\n  <title>My New Project</title>\n  <style>\n    body { font-family: Arial, sans-serif; padding: 20px; }\n    h1 { color: #333; }\n  </style>\n</head>\n<body>\n  <h1>Hello World!</h1>\n  <p>Start building something amazing...</p>\n</body>\n</html>',
-          tags: ['html', 'css'],
-          user_id: user.id,
-          is_public: true,
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      window.location.href = `/remix/${newProject.id}`;
-    } catch (error) {
-      console.error('Error creating project:', error);
-    }
+    // Redirect to template selection
+    window.location.href = '/create';
   };
 
   if (loading) {
@@ -103,6 +86,7 @@ export default function Home() {
             </div>
             
             <div className="flex items-center space-x-4">
+              <ThemeToggle />
               {user ? (
                 <>
                   <Link 
