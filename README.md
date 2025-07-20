@@ -1,4 +1,198 @@
-# Tiation Portfolio
+# Tiation Portfolio - Enterprise Grade Platform
+
+[![CI/CD](https://github.com/tiation/tiation-portfolio/actions/workflows/ci.yml/badge.svg)](https://github.com/tiation/tiation-portfolio/actions/workflows/ci.yml)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.3.3-blue.svg)](https://www.typescriptlang.org/)
+[![Next.js](https://img.shields.io/badge/Next.js-14.0.4-black.svg)](https://nextjs.org/)
+[![Supabase](https://img.shields.io/badge/Supabase-2.39.0-green.svg)](https://supabase.io/)
+[![Code Style: Prettier](https://img.shields.io/badge/code_style-prettier-ff69b4.svg)](https://prettier.io)
+[![Testing: Jest](https://img.shields.io/badge/testing-jest-99424f.svg)](https://jestjs.io)
+
+An enterprise-grade portfolio platform built with Next.js, TypeScript, and Supabase, featuring dark neon themes and comprehensive testing.
+
+## 🌟 Key Features
+
+- 🎨 Dark neon theme with cyan/magenta gradients
+- 📱 Mobile-first, responsive design
+- 🔒 Enterprise-grade security
+- 💳 SaaS functionality with Stripe
+- 🧪 Comprehensive testing suite
+- 🚀 CI/CD pipeline with GitHub Actions
+- 📦 Containerized deployment
+- 🔄 Real-time updates with Supabase
+
+## 🏗 Architecture
+
+![Architecture Overview](docs/images/architecture-overview.png)
+
+Our platform follows a modern, cloud-native architecture:
+
+### Frontend Layer
+- Next.js 14 with App Router
+- TypeScript for type safety
+- TailwindCSS for styling
+- React Query for data fetching
+
+### Backend Layer
+- Supabase for authentication and database
+- Stripe for payment processing
+- AWS infrastructure
+
+### Security Layer
+- WAF protection
+- Rate limiting
+- CORS policies
+- Content Security Policy
+
+[View detailed architecture documentation](docs/ARCHITECTURE.md)
+
+## 🚀 Quick Start
+
+### Prerequisites
+
+```bash
+# Required versions
+Node.js >= 20.0.0
+npm >= 10.0.0
+Docker >= 24.0.0
+```
+
+### Local Development
+
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/tiation/tiation-portfolio.git
+   cd tiation-portfolio
+   ```
+
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+
+3. Set up environment:
+   ```bash
+   cp .env.example .env.local
+   # Edit .env.local with your credentials
+   ```
+
+4. Start development server:
+   ```bash
+   npm run dev
+   ```
+
+### Docker Development
+
+```bash
+# Build and run with Docker Compose
+docker-compose -f docker-compose.dev.yml up --build
+```
+
+## 🧪 Testing
+
+We maintain high test coverage across the codebase:
+
+```bash
+# Run all tests
+npm test
+
+# Run with coverage
+npm test -- --coverage
+
+# Run specific test file
+npm test -- src/__tests__/components/ErrorBoundary.test.tsx
+```
+
+### Testing Strategy
+
+- Unit tests for components and utilities
+- Integration tests for API endpoints
+- E2E tests for critical user flows
+- Performance testing with Lighthouse
+
+## 🛡 Security Features
+
+- **WAF Protection**: AWS WAF rules for common attacks
+- **Rate Limiting**: Prevent abuse and DoS attempts
+- **Content Security**: Strict CSP headers
+- **Input Validation**: Zod schema validation
+- **Authentication**: Supabase secure auth
+- **Error Handling**: Graceful error recovery
+
+## 📦 Deployment
+
+### Production Deployment
+
+1. Build production image:
+   ```bash
+   docker build -f Dockerfile.prod -t tiation-portfolio:prod .
+   ```
+
+2. Push to registry:
+   ```bash
+   docker push your-registry/tiation-portfolio:prod
+   ```
+
+3. Deploy to AWS:
+   ```bash
+   # Using Terraform
+   cd terraform
+   terraform init
+   terraform apply
+   ```
+
+[View detailed deployment guide](DEPLOYMENT.md)
+
+## 🔍 Code Quality
+
+We maintain high code quality standards:
+
+- TypeScript strict mode
+- ESLint configuration
+- Prettier formatting
+- Husky pre-commit hooks
+- GitHub Actions CI/CD
+
+## 📚 Documentation
+
+- [Architecture Guide](docs/ARCHITECTURE.md)
+- [API Documentation](docs/API.md)
+- [Contributing Guide](CONTRIBUTING.md)
+- [Security Policy](SECURITY.md)
+- [Deployment Guide](DEPLOYMENT.md)
+
+## 🤝 Contributing
+
+We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
+
+### Development Workflow
+
+1. Fork the repository
+2. Create your feature branch
+3. Make your changes
+4. Run tests and linting
+5. Submit a pull request
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🌟 Support
+
+For support:
+- Create an issue
+- Email: tiatheone@protonmail.com
+- Check documentation
+
+## 🙏 Acknowledgments
+
+- [Next.js](https://nextjs.org)
+- [Supabase](https://supabase.io)
+- [TailwindCSS](https://tailwindcss.com)
+- [Stripe](https://stripe.com)
+
+---
+
+**Built with ❤️ by Tiation**
 
 An enterprise-grade portfolio application built with Next.js, TypeScript, and Supabase.
 
